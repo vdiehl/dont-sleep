@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Don't Sleep</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☕</text></svg>" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="app">
+    <header class="header">
+      <h1>Don't&nbsp;Sleep</h1>
+      <p class="subtitle">Control the Windows power settings that let your PC sleep.</p>
+    </header>
+
+    <section class="status-card" id="statusCard">
+      <div class="status-badge" id="statusBadge">
+        <span class="dot"></span>
+        <span id="statusText">Checking…</span>
+      </div>
+      <p class="status-detail" id="statusDetail">Reading current power settings…</p>
+    </section>
+
+    <div class="banner" id="adminBanner" hidden></div>
+
+    <section class="actions">
+      <button id="btnPrevent" class="btn btn-primary" disabled>Prevent sleep</button>
+      <button id="btnRestorePrev" class="btn btn-secondary" disabled>Restore previous</button>
+      <button id="btnRestoreDefault" class="btn btn-ghost" disabled>Restore defaults</button>
+    </section>
+
+    <section class="group-card">
+      <div class="group-head">
+        <h2>Core settings</h2>
+        <span class="hint">Checked settings are changed by “Prevent sleep”.</span>
+      </div>
+      <div class="rows" id="coreRows"></div>
+    </section>
+
+    <section class="group-card">
+      <div class="group-head">
+        <h2>Advanced <span class="tag">opt-in</span></h2>
+        <span class="hint">Off by default. Some are hidden Windows settings and need admin.</span>
+      </div>
+      <div class="rows" id="advancedRows"></div>
+    </section>
+
+    <section class="snapshots">
+      <div class="snap">
+        <h3>Saved defaults</h3>
+        <p class="muted" id="defaultsInfo">—</p>
+      </div>
+      <div class="snap">
+        <h3>Previous state</h3>
+        <p class="muted" id="previousInfo">—</p>
+      </div>
+    </section>
+
+    <div class="toast" id="toast" hidden></div>
+
+    <footer class="footer">
+      <span>Local app • <code>127.0.0.1:8765</code> • CLI: <code>dontsleep on | off | default</code></span>
+    </footer>
+  </main>
+
+  <template id="rowTpl">
+    <div class="row">
+      <label class="switch">
+        <input type="checkbox" class="row-enable" />
+        <span class="slider"></span>
+      </label>
+      <div class="row-main">
+        <div class="row-name"></div>
+        <div class="row-note muted"></div>
+      </div>
+      <div class="row-vals">
+        <div class="val"><span class="val-label">AC</span><span class="val-ac"></span></div>
+        <div class="val"><span class="val-label">DC</span><span class="val-dc"></span></div>
+      </div>
+    </div>
+  </template>
+
+  <script src="app.js"></script>
+</body>
+</html>
