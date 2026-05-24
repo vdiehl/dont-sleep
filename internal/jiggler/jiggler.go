@@ -1,20 +1,26 @@
-// Package jiggler implements the "keep the mouse moving" keep-awake mode.
+// Package jiggler implements the "keep the mouse moving" keep-awake mode as a
+// standalone, detached background process (a daemon) — independent of the web
+// server, with no open port. It is controlled via a PID file:
 //
-// Behaviour (as specified): while active it performs a small NET-ZERO nudge
-// every IntervalSec — it moves the cursor by DistancePx and immediately moves it
-// back to the exact original spot. Net-zero means there's no drift and the
-// cursor always ends where it was, so it's consistent across monitors and DPI
-// scales (a fixed physical-pixel hop that's instantly undone). When the user
-// moves the mouse it pauses; after the mouse is idle for ResumeAfterSec it
-// resumes (ResumeAfterSec == 0 means never auto-resume).
+//	Start  -> spawns `<exe> __jiggle` detached & windowless (if not already running)
+//	Stop   -> terminates the daemon (taskkill) and clears the PID file
+//	RunDaemon -> the daemon entry point: the jiggle loop itself
 //
-// User movement is detected by comparing the live cursor position to where we
-// last placed it — our own nudge returns to that spot, so only a real user move
-// makes them differ.
+// Behaviour: while active it performs a small NET-ZERO nudge every IntervalSec
+// (move by DistancePx, then back to the exact origin) — no drift, consistent
+// across monitors/DPI. It pauses when the user moves the mouse (detected by
+// comparing the cursor to where we last placed it) and resumes after the mouse
+// is idle for ResumeAfterSec (0 = never auto-resume). It re-reads config every
+// tick, so live changes apply within a second and disabling it makes the daemon
+// exit on its own.
 package jiggler
 
 import (
-	"context"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -29,9 +35,7 @@ var (
 	dpiOnce                sync.Once
 )
 
-func ensureDPIAware() {
-	dpiOnce.Do(func() { procSetProcessDPIAware.Call() })
-}
+func ensureDPIAware() { dpiOnce.Do(func() { procSetProcessDPIAware.Call() }) }
 
 type point struct{ X, Y int32 }
 
@@ -41,11 +45,9 @@ func getCursor() (point, bool) {
 	return p, r != 0
 }
 
-func setCursor(x, y int32) {
-	procSetCursorPos.Call(uintptr(x), uintptr(y))
-}
+func setCursor(x, y int32) { procSetCursorPos.Call(uintptr(x), uintptr(y)) }
 
-// Config holds the tunable jiggler parameters (enable is tracked separately).
+// Config holds the tunable jiggler parameters.
 type Config struct {
 	DistancePx     int
 	IntervalSec    int
@@ -81,17 +83,14 @@ type tickResult struct {
 
 func secs(n int) time.Duration { return time.Duration(n) * time.Second }
 
-// decide computes the next state for one tick. Pure: no Windows calls.
 func decide(in tickInput) tickResult {
 	r := tickResult{St: in.St, LastSet: in.LastSet, PausedSince: in.PausedSince, LastNudge: in.LastNudge}
-
 	if in.Cur != in.LastSet { // the user moved the mouse
 		r.St = stPaused
 		r.PausedSince = in.Now
 		r.LastSet = in.Cur
 		return r
 	}
-
 	switch in.St {
 	case stActive:
 		if in.LastNudge.IsZero() || in.Now.Sub(in.LastNudge) >= secs(in.Cfg.IntervalSec) {
@@ -108,82 +107,94 @@ func decide(in tickInput) tickResult {
 	return r
 }
 
-// ---- manager --------------------------------------------------------------
+// ---- daemon lifecycle (PID-file managed) ----------------------------------
 
-// Jiggler runs the jiggle loop and can be reconfigured live.
-type Jiggler struct {
-	mu      sync.Mutex
-	cfg     Config
-	running bool
-	cancel  context.CancelFunc
-	st      state
+func writePID(path string) {
+	_ = os.MkdirAll(filepath.Dir(path), 0o755)
+	_ = os.WriteFile(path, []byte(strconv.Itoa(os.Getpid())), 0o644)
 }
 
-func New() *Jiggler { return &Jiggler{} }
-
-// Apply updates the config and starts/stops the loop to match `enabled`.
-func (j *Jiggler) Apply(enabled bool, cfg Config) {
-	j.mu.Lock()
-	j.cfg = cfg
-	running := j.running
-	j.mu.Unlock()
-
-	switch {
-	case enabled && !running:
-		j.start()
-	case !enabled && running:
-		j.stop()
+func readPID(path string) (int, bool) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return 0, false
 	}
-}
-
-func (j *Jiggler) start() {
-	ensureDPIAware()
-	ctx, cancel := context.WithCancel(context.Background())
-	j.mu.Lock()
-	j.running = true
-	j.cancel = cancel
-	j.st = stActive
-	j.mu.Unlock()
-	go j.loop(ctx)
-}
-
-func (j *Jiggler) stop() {
-	j.mu.Lock()
-	c := j.cancel
-	j.running = false
-	j.st = stActive
-	j.mu.Unlock()
-	if c != nil {
-		c()
+	pid, err := strconv.Atoi(strings.TrimSpace(string(b)))
+	if err != nil {
+		return 0, false
 	}
+	return pid, true
 }
 
-func (j *Jiggler) snapshot() Config {
-	j.mu.Lock()
-	defer j.mu.Unlock()
-	return j.cfg
-}
-
-func (j *Jiggler) setState(s state) {
-	j.mu.Lock()
-	j.st = s
-	j.mu.Unlock()
-}
-
-// State reports "off", "active", or "paused" for the UI.
-func (j *Jiggler) State() string {
-	j.mu.Lock()
-	defer j.mu.Unlock()
-	if !j.running {
-		return "off"
+func processAlive(pid int) bool {
+	const queryLimitedInfo = 0x1000
+	h, err := syscall.OpenProcess(queryLimitedInfo, false, uint32(pid))
+	if err != nil {
+		return false
 	}
-	if j.st == stPaused {
-		return "paused"
+	_ = syscall.CloseHandle(h)
+	return true
+}
+
+// IsRunning reports whether the jiggler daemon is currently running.
+func IsRunning(pidPath string) bool {
+	pid, ok := readPID(pidPath)
+	return ok && processAlive(pid)
+}
+
+// Start spawns the daemon detached & windowless if it isn't already running.
+func Start(pidPath, exe string) error {
+	if IsRunning(pidPath) {
+		return nil
+	}
+	c := exec.Command(exe, "__jiggle")
+	c.SysProcAttr = &syscall.SysProcAttr{
+		HideWindow:    true,
+		CreationFlags: 0x00000008 | 0x00000200, // DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+	}
+	return c.Start()
+}
+
+// Stop terminates the daemon and clears the PID file.
+func Stop(pidPath string) {
+	if pid, ok := readPID(pidPath); ok {
+		c := exec.Command("taskkill", "/F", "/PID", strconv.Itoa(pid))
+		c.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+		_ = c.Run()
+	}
+	_ = os.Remove(pidPath)
+}
+
+func writeState(path string, s state) {
+	v := "active"
+	if s == stPaused {
+		v = "paused"
+	}
+	_ = os.MkdirAll(filepath.Dir(path), 0o755)
+	_ = os.WriteFile(path, []byte(v), 0o644)
+}
+
+// ReadState returns "active" or "paused" (defaults to "active" if unknown).
+func ReadState(path string) string {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return "active"
+	}
+	if s := strings.TrimSpace(string(b)); s != "" {
+		return s
 	}
 	return "active"
 }
 
-func (j *Jiggler) loop(ctx context.Context) {
+// RunDaemon is the daemon entry point. It writes the PID file, then loops once a
+// second, re-reading (enabled, cfg) via load. It exits when load reports
+// disabled. Blocks until then.
+func RunDaemon(pidPath, statePath string, load func() (bool, Config)) {
+	writePID(pidPath)
+	defer os.Remove(pidPath)
+	defer os.Remove(statePath)
+	ensureDPIAware()
+
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
 
@@ -192,34 +203,44 @@ func (j *Jiggler) loop(ctx context.Context) {
 	st := stActive
 	pausedSince := time.Now()
 	var lastNudge time.Time
+	writeState(statePath, stActive)
+	prevWritten := stActive
 
-	for {
-		select {
-		case <-ctx.Done():
+	for range t.C {
+		enabled, cfg := load()
+		if !enabled {
 			return
-		case now := <-t.C:
-			cur, ok := getCursor()
-			if !ok {
-				continue
-			}
-			if !haveLast {
-				lastSet = cur
-				haveLast = true
-				continue
-			}
-			cfg := j.snapshot()
-			res := decide(tickInput{
-				Now: now, Cur: cur, LastSet: lastSet, St: st,
-				PausedSince: pausedSince, LastNudge: lastNudge, Cfg: cfg,
-			})
-			st, lastSet, pausedSince, lastNudge = res.St, res.LastSet, res.PausedSince, res.LastNudge
-			j.setState(st)
-			if res.Nudge {
-				origin := cur
-				d := int32(cfg.DistancePx)
-				setCursor(origin.X+d, origin.Y)
-				time.Sleep(40 * time.Millisecond)
-				setCursor(origin.X, origin.Y) // net-zero: back to exact origin
+		}
+		cur, ok := getCursor()
+		if !ok {
+			continue
+		}
+		if !haveLast {
+			lastSet = cur
+			haveLast = true
+			continue
+		}
+		res := decide(tickInput{
+			Now: time.Now(), Cur: cur, LastSet: lastSet, St: st,
+			PausedSince: pausedSince, LastNudge: lastNudge, Cfg: cfg,
+		})
+		st, lastSet, pausedSince, lastNudge = res.St, res.LastSet, res.PausedSince, res.LastNudge
+		if st != prevWritten {
+			writeState(statePath, st)
+			prevWritten = st
+		}
+		if res.Nudge {
+			origin := cur
+			d := int32(cfg.DistancePx)
+			setCursor(origin.X+d, origin.Y)
+			time.Sleep(40 * time.Millisecond)
+			setCursor(origin.X, origin.Y) // net-zero: back to origin
+			// Re-read the ACTUAL resting position: on scaled displays SetCursorPos
+			// can land a pixel off due to DPI rounding, and tracking the real value
+			// avoids mistaking that rounding for a user move on the next tick.
+			if p, ok := getCursor(); ok {
+				lastSet = p
+			} else {
 				lastSet = origin
 			}
 		}

@@ -26,14 +26,30 @@ import (
 	"stayawake/internal/jiggler"
 )
 
-// jig is the mouse-jiggler manager; it only runs inside the serve process.
-var jig = jiggler.New()
+func pidPath() string   { return filepath.Join(core.StateDir(), "jiggler.pid") }
+func statePath() string { return filepath.Join(core.StateDir(), "jiggler.state") }
+func selfExe() string   { e, _ := os.Executable(); return e }
 
+// applyJiggler starts or stops the standalone jiggler daemon to match config.
 func applyJiggler() {
+	if core.LoadConfig().Jiggler.Enabled {
+		_ = jiggler.Start(pidPath(), selfExe())
+	} else {
+		jiggler.Stop(pidPath())
+	}
+}
+
+// jigglerStatus is "off" (daemon not running) or "active"/"paused".
+func jigglerStatus() string {
+	if !jiggler.IsRunning(pidPath()) {
+		return "off"
+	}
+	return jiggler.ReadState(statePath())
+}
+
+func jigglerLoad() (bool, jiggler.Config) {
 	c := core.LoadConfig().Jiggler
-	jig.Apply(c.Enabled, jiggler.Config{
-		DistancePx: c.DistancePx, IntervalSec: c.IntervalSec, ResumeAfterSec: c.ResumeAfterSec,
-	})
+	return c.Enabled, jiggler.Config{DistancePx: c.DistancePx, IntervalSec: c.IntervalSec, ResumeAfterSec: c.ResumeAfterSec}
 }
 
 //go:embed all:static
@@ -66,6 +82,14 @@ func main() {
 		code = cmdAction("default")
 	case "status":
 		printStatus(core.GetStatus())
+	case "enable":
+		code = cmdSetEnabled(os.Args[2:], true)
+	case "disable":
+		code = cmdSetEnabled(os.Args[2:], false)
+	case "jiggle":
+		code = cmdJiggle(os.Args[2:])
+	case "__jiggle": // internal: the detached daemon entry point
+		jiggler.RunDaemon(pidPath(), statePath(), jigglerLoad)
 	case "stop":
 		code = cmdStop()
 	case "uninstall":
@@ -88,6 +112,10 @@ Usage:
   stayawake off         Restore the previous values.
   stayawake default     Restore the saved Windows default values.
   stayawake status      Print the current settings.
+  stayawake enable <s>  Enable setting(s) for 'on' (no arg lists them; 'all' for all).
+  stayawake disable <s> Disable setting(s) for 'on'.
+  stayawake jiggle on   Start the mouse jiggler (flags: --distance N --interval N --resume N).
+  stayawake jiggle off  Stop the mouse jiggler.
   stayawake stop        Stop the background web server.
   stayawake uninstall   Restore defaults and remove from PATH/shortcuts.
 `
@@ -105,7 +133,7 @@ func cmdServe() int {
 
 	mux.HandleFunc("/api/status", func(w http.ResponseWriter, r *http.Request) {
 		s := core.GetStatus()
-		s.JigglerState = jig.State()
+		s.JigglerState = jigglerStatus()
 		writeJSON(w, s, nil)
 	})
 	mux.HandleFunc("/api/prevent", func(w http.ResponseWriter, r *http.Request) {
@@ -141,7 +169,7 @@ func cmdServe() int {
 		}
 		applyJiggler()
 		s := core.GetStatus()
-		s.JigglerState = jig.State()
+		s.JigglerState = jigglerStatus()
 		writeJSON(w, s, nil)
 	})
 	mux.HandleFunc("/api/quit", func(w http.ResponseWriter, r *http.Request) {
@@ -257,6 +285,102 @@ func cmdAction(which string) int {
 		return 1
 	}
 	printStatus(s)
+	return 0
+}
+
+func cmdSetEnabled(args []string, value bool) int {
+	verb := "enable"
+	if !value {
+		verb = "disable"
+	}
+	st := core.GetStatus()
+
+	if len(args) == 0 {
+		fmt.Printf("\nUsage: stayawake %s <setting> [<setting>...]   (or 'all')\n\n", verb)
+		fmt.Println("Available settings (use the key):")
+		for _, s := range st.Settings {
+			mark := "[ ]"
+			if s.Enabled {
+				mark = "[x]"
+			}
+			fmt.Printf("  %s  %-13s %-34s (%s)\n", mark, s.Key, s.Name, s.Category)
+		}
+		fmt.Println()
+		return 0
+	}
+
+	valid := map[string]bool{}
+	for _, s := range st.Settings {
+		valid[s.Key] = true
+	}
+	updates := map[string]bool{}
+	for _, a := range args {
+		k := strings.ToLower(a)
+		if k == "all" {
+			for _, s := range st.Settings {
+				updates[s.Key] = value
+			}
+			continue
+		}
+		if !valid[k] {
+			fmt.Fprintf(os.Stderr, "Unknown setting %q. Run 'stayawake %s' to see the list.\n", a, verb)
+			return 2
+		}
+		updates[k] = value
+	}
+	if err := core.SetEnabled(updates); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	printStatus(core.GetStatus())
+	return 0
+}
+
+func cmdJiggle(args []string) int {
+	if len(args) == 0 {
+		fmt.Println("Usage: stayawake jiggle on|off  [--distance N] [--interval N] [--resume N]")
+		fmt.Println("Current jiggler:", jigglerStatus())
+		return 0
+	}
+	switch strings.ToLower(args[0]) {
+	case "on":
+		cfg := core.LoadConfig().Jiggler
+		cfg.Enabled = true
+		for i := 1; i+1 < len(args); i += 2 {
+			n, err := strconv.Atoi(args[i+1])
+			if err != nil {
+				continue
+			}
+			switch args[i] {
+			case "--distance":
+				cfg.DistancePx = n
+			case "--interval":
+				cfg.IntervalSec = n
+			case "--resume":
+				cfg.ResumeAfterSec = n
+			}
+		}
+		if err := core.SetJiggler(cfg); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		if err := jiggler.Start(pidPath(), selfExe()); err != nil {
+			fmt.Fprintln(os.Stderr, "could not start jiggler:", err)
+			return 1
+		}
+		fmt.Println("Mouse jiggler: on")
+	case "off":
+		cfg := core.LoadConfig().Jiggler
+		cfg.Enabled = false
+		_ = core.SetJiggler(cfg)
+		jiggler.Stop(pidPath())
+		fmt.Println("Mouse jiggler: off")
+	case "status":
+		fmt.Println("Mouse jiggler:", jigglerStatus())
+	default:
+		fmt.Fprintf(os.Stderr, "Unknown: jiggle %s (use on|off)\n", args[0])
+		return 2
+	}
 	return 0
 }
 

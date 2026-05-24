@@ -51,6 +51,10 @@ use the `stayawake` command.
 | `stayawake off`       | Restore the **previous** values.                              |
 | `stayawake default`   | Restore the saved **Windows default** values.                 |
 | `stayawake status`    | Print the current settings as a table.                        |
+| `stayawake enable <s>`  | Enable setting(s) that `on` affects (no arg lists them; `all` = all). |
+| `stayawake disable <s>` | Disable setting(s) that `on` affects.                       |
+| `stayawake jiggle on`   | Start the mouse jiggler (`--distance N` `--interval N` `--resume N`). |
+| `stayawake jiggle off`  | Stop the mouse jiggler.                                     |
 | `stayawake stop`      | Stop the background web server (power settings untouched).     |
 | `stayawake uninstall` | Restore defaults, remove PATH entry + shortcuts + install folder. |
 
@@ -93,7 +97,11 @@ active (screensaver, “available” presence). Because it returns to the exact 
 there's no drift and it's consistent across monitors and DPI scales. It **pauses
 when you move the mouse** and **resumes after** the mouse is idle for a
 configurable time (default 60s; `0` = never auto-resume). Distance, interval, and
-resume time are all adjustable in the UI.
+resume time are all adjustable in the UI or via `stayawake jiggle on` flags.
+
+It runs as its **own detached background process** (no web server, no open port),
+managed through a PID file — so you can `stayawake jiggle on` and close the
+terminal. Toggling it in the UI starts/stops the same process.
 
 The jiggler keeps the PC looking *active*; the `powercfg` settings are what
 actually stop sleep. They're complementary — use either or both.
