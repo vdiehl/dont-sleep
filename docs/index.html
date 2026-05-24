@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Don't Sleep — keep your Windows PC awake</title>
+  <meta name="description" content="A tiny local web app + CLI to toggle the Windows power settings that let your PC sleep, with safe one-click restore." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☕</text></svg>" />
+  <style>
+    :root {
+      --bg: #0f1116; --card: #181b23; --card2: #1f232d; --border: #2a2f3a;
+      --text: #e7e9ee; --muted: #9aa3b2; --accent: #4ade80; --primary: #6366f1; --primary2: #7c7ff3;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: radial-gradient(1200px 600px at 50% -10%, #1a1e2a 0%, var(--bg) 60%);
+      color: var(--text); font-family: "Segoe UI", system-ui, -apple-system, sans-serif; line-height: 1.55;
+    }
+    .wrap { max-width: 880px; margin: 0 auto; padding: 56px 22px 72px; }
+    header { text-align: center; margin-bottom: 36px; }
+    h1 {
+      font-size: 3rem; margin: 0; letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #fff, #aab2c5); -webkit-background-clip: text;
+      background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .tag { color: var(--muted); font-size: 1.15rem; margin: 10px 0 0; }
+    .install { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 22px; margin: 0 auto 14px; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+    .install h2 { margin: 0 0 12px; font-size: 1rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+    .cmd { display: flex; gap: 10px; align-items: stretch; }
+    .cmd code {
+      flex: 1; background: #0b0d12; border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px;
+      font-family: Consolas, "Cascadia Code", monospace; font-size: .98rem; color: #d7dbe6; overflow-x: auto; white-space: nowrap;
+    }
+    .cmd button {
+      background: var(--primary); border: none; color: #fff; font-weight: 600; padding: 0 18px; border-radius: 10px; cursor: pointer; transition: background .2s;
+    }
+    .cmd button:hover { background: var(--primary2); }
+    .sub { color: var(--muted); font-size: .85rem; margin: 10px 2px 0; }
+    .shots { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 34px 0; }
+    .shots figure { margin: 0; }
+    .shots img { width: 100%; border: 1px solid var(--border); border-radius: 12px; display: block; }
+    .shots figcaption { color: var(--muted); font-size: .85rem; text-align: center; margin-top: 8px; }
+    h2.section { font-size: 1.3rem; margin: 36px 0 14px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .feat { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+    .feat b { display: block; margin-bottom: 4px; }
+    .feat span { color: var(--muted); font-size: .92rem; }
+    table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+    th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; }
+    tr:last-child td { border-bottom: none; }
+    td code { color: #c3c9d6; font-family: Consolas, monospace; }
+    .cta { text-align: center; margin-top: 40px; }
+    .cta a { color: var(--primary2); text-decoration: none; font-weight: 600; border: 1px solid var(--border); padding: 11px 20px; border-radius: 10px; display: inline-block; }
+    .cta a:hover { border-color: var(--primary2); }
+    footer { text-align: center; color: var(--muted); font-size: .82rem; margin-top: 44px; }
+    .note { color: var(--accent); }
+    @media (max-width: 620px) { .shots, .grid { grid-template-columns: 1fr; } h1 { font-size: 2.3rem; } .cmd code { font-size: .8rem; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Don't&nbsp;Sleep</h1>
+      <p class="tag">Stop your Windows PC from sleeping — from a web UI or a one-word command. Safely switch back anytime.</p>
+    </header>
+
+    <section class="install">
+      <h2>Install (Windows, PowerShell)</h2>
+      <div class="cmd">
+        <code id="cmd">irm https://stayawa.ke | iex</code>
+        <button onclick="copyCmd()">Copy</button>
+      </div>
+      <p class="sub">Installs to <code>%LOCALAPPDATA%\dontsleep</code>, adds the <code>dontsleep</code> command to your PATH, and installs Python via winget if needed. No admin required.</p>
+    </section>
+
+    <section class="shots">
+      <figure>
+        <img src="ui-can-sleep.png" alt="Don't Sleep — default state, the PC can still sleep" />
+        <figcaption>Default — your PC can still sleep</figcaption>
+      </figure>
+      <figure>
+        <img src="ui-prevented.png" alt="Don't Sleep — sleep prevented, all timeouts set to Never" />
+        <figcaption>After “Prevent sleep”</figcaption>
+      </figure>
+    </section>
+
+    <h2 class="section">Why</h2>
+    <div class="grid">
+      <div class="feat"><b>No dependencies</b><span>Pure Python standard library + the built-in <code>powercfg</code>. Nothing leaves your machine; the server only listens on 127.0.0.1.</span></div>
+      <div class="feat"><b>Safe restore</b><span>Saves your defaults and previous values, in powercfg's native units, so switching back is exact.</span></div>
+      <div class="feat"><b>Web UI or CLI</b><span>Toggle from a browser, or run <code>dontsleep on/off/default</code> headless. Same logic, same result.</span></div>
+      <div class="feat"><b>Core + advanced</b><span>Sleep/hibernate/display/disk by default; opt in to processor-state and hidden CPU knobs.</span></div>
+    </div>
+
+    <h2 class="section">Commands</h2>
+    <table>
+      <tr><th>Command</th><th>Action</th></tr>
+      <tr><td><code>dontsleep</code></td><td>Open the web UI</td></tr>
+      <tr><td><code>dontsleep on</code></td><td>Prevent sleep now</td></tr>
+      <tr><td><code>dontsleep off</code></td><td>Restore previous values</td></tr>
+      <tr><td><code>dontsleep default</code></td><td>Restore Windows defaults</td></tr>
+      <tr><td><code>dontsleep uninstall</code></td><td>Restore defaults and remove everything</td></tr>
+    </table>
+
+    <div class="cta">
+      <a href="https://github.com/vdiehl/dont-sleep">View the source on GitHub →</a>
+    </div>
+
+    <footer>Windows only • open source • <span class="note">stayawa.ke</span></footer>
+  </div>
+
+  <script>
+    function copyCmd() {
+      navigator.clipboard.writeText(document.getElementById('cmd').textContent).then(() => {
+        const b = document.querySelector('.cmd button');
+        const t = b.textContent; b.textContent = 'Copied!';
+        setTimeout(() => (b.textContent = t), 1500);
+      });
+    }
+  </script>
+</body>
+</html>

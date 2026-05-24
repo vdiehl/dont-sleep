@@ -27,8 +27,11 @@ listens on `127.0.0.1`.
 PATH, makes shortcuts, and installs Python via winget if you don't have it:
 
 ```powershell
-irm https://raw.githubusercontent.com/vdiehl/dont-sleep/main/bootstrap.ps1 | iex
+irm https://stayawa.ke | iex
 ```
+
+> Same script, longer URL if you prefer the raw source:
+> `irm https://raw.githubusercontent.com/vdiehl/dont-sleep/main/bootstrap.ps1 | iex`
 
 **From a clone** — if you already have the repo:
 
