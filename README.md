@@ -1,58 +1,58 @@
-# Don't Sleep
+# StayAwake
 
-A small **local app** for Windows made with Claude that toggles the power 
-settings which let your PC go to sleep — from a web UI **or** a `dontsleep` 
-command — and lets you safely switch everything back.
+A small **local app** for Windows, made with Claude, that toggles the power
+settings which let your PC go to sleep — from a web UI **or** a `stayawake`
+command — and lets you safely switch everything back. It can also gently **jiggle
+the mouse** to keep the PC looking active.
 
-No dependencies: just Python 3 and the built-in `powercfg` tool. Nothing is
-installed into Python, nothing leaves your machine, and the web server only
-listens on `127.0.0.1`.
+It ships as a **single ~7 MB `stayawake.exe`** — no Python, no runtime, nothing
+to install. It only ever calls the built-in Windows `powercfg` tool, nothing
+leaves your machine, and the web server listens on `127.0.0.1` only.
 
 ## Screenshots
 
 | Default — your PC can still sleep | After “Prevent sleep” |
 |:---:|:---:|
-| ![Don't Sleep showing the default state where the PC can sleep](docs/ui-can-sleep.png) | ![Don't Sleep showing sleep prevented, all timeouts set to Never](docs/ui-prevented.png) |
+| ![StayAwake showing the default state where the PC can sleep](docs/ui-can-sleep.png) | ![StayAwake showing sleep prevented, all timeouts set to Never](docs/ui-prevented.png) |
 
 ## Requirements
 
-- **Windows.** The app drives the built-in `powercfg` tool, so it does not run
-  on macOS or Linux.
-- **Python 3.8+** available on PATH. Check with `python --version`. If you don't
-  have it: `winget install Python.Python.3.12` (or download from python.org).
+- **Windows** (the app drives `powercfg`, so it doesn't run on macOS/Linux).
+- Nothing else to run it — the `.exe` is self-contained.
+- **Go** is only needed to *build from source* (not to use the app).
 
 ## Install
 
-**One line** — installs to `%LOCALAPPDATA%\dontsleep`, puts `dontsleep` on your
-PATH, makes shortcuts, and installs Python via winget if you don't have it:
+**One line** — downloads the prebuilt exe to `%LOCALAPPDATA%\stayawake`, adds
+`stayawake` to your PATH, makes shortcuts, and launches the app:
 
 ```powershell
 irm https://stayawa.ke | iex
 ```
 
-> Same script, longer URL if you prefer the raw source:
-> `irm https://raw.githubusercontent.com/vdiehl/dont-sleep/main/bootstrap.ps1 | iex`
+> Prefer the raw URL: `irm https://raw.githubusercontent.com/vdiehl/dont-sleep/main/bootstrap.ps1 | iex`
 
-**From a clone** — if you already have the repo:
+**From source** — build it yourself, then install:
 
 ```powershell
+go build -ldflags "-s -w" -o stayawake.exe .
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
-Either way, open a **new** terminal and run `dontsleep` (or double-click
-`run.bat`). Then use either the UI or the CLI.
+The installer launches the app for you. After that, open any **new** terminal to
+use the `stayawake` command.
 
-## The `dontsleep` command
+## The `stayawake` command
 
-| Command             | Action                                                        |
-|---------------------|---------------------------------------------------------------|
-| `dontsleep`         | Open the web UI (starts the server if needed).                |
-| `dontsleep on`      | Prevent sleep now (apply keep-awake values to enabled items). |
-| `dontsleep off`     | Restore the **previous** values.                              |
-| `dontsleep default` | Restore the saved **Windows default** values.                 |
-| `dontsleep status`  | Print the current settings as a table.                        |
-| `dontsleep stop`    | Stop the background web server (power settings untouched).     |
-| `dontsleep uninstall` | Restore defaults, remove PATH entry + shortcuts + install folder. |
+| Command               | Action                                                        |
+|-----------------------|---------------------------------------------------------------|
+| `stayawake`           | Open the web UI (starts the server if needed).                |
+| `stayawake on`        | Prevent sleep now (apply keep-awake values to enabled items). |
+| `stayawake off`       | Restore the **previous** values.                              |
+| `stayawake default`   | Restore the saved **Windows default** values.                 |
+| `stayawake status`    | Print the current settings as a table.                        |
+| `stayawake stop`      | Stop the background web server (power settings untouched).     |
+| `stayawake uninstall` | Restore defaults, remove PATH entry + shortcuts + install folder. |
 
 `on` / `off` / `default` / `status` run without the server and share the exact
 same logic as the UI, so changes are reflected in both.
@@ -60,71 +60,94 @@ same logic as the UI, so changes are reflected in both.
 ## What it controls
 
 Settings are split into **core** (changed by default) and **advanced** (opt-in,
-off by default). Each one can be toggled in the UI; "Prevent sleep" only changes
-the ones that are enabled.
+off by default). Each can be toggled in the UI; “Prevent sleep” only changes the
+ones that are enabled.
 
 **Core** (no admin needed) — idle power-down timeouts, set to *Never*:
 
-| Setting            | Effect                              |
-|--------------------|-------------------------------------|
-| Sleep after        | Stops the system entering sleep     |
-| Hibernate after    | Stops hibernation                   |
-| Turn off display   | Keeps the display on                |
-| Turn off hard disk | Keeps the disk spinning             |
+| Setting            | Effect                          |
+|--------------------|---------------------------------|
+| Sleep after        | Stops the system entering sleep |
+| Hibernate after    | Stops hibernation               |
+| Turn off display   | Keeps the display on            |
+| Turn off hard disk | Keeps the disk spinning         |
 
 **Advanced** (opt-in):
 
-| Setting                        | Keep-awake value | Notes                                            |
-|--------------------------------|------------------|--------------------------------------------------|
-| Minimum processor state        | 100%             | CPU never down-clocks. More power/heat.          |
-| Maximum processor state        | 100%             | Removes any CPU frequency cap.                   |
-| Unattended sleep timeout       | Never            | **Hidden** Windows setting — needs admin.        |
-| Processor idle disable (C-states) | On            | **Hidden**, aggressive — CPU never idles; runs notably hotter. Needs admin. |
+| Setting                           | Keep-awake value | Notes                                   |
+|-----------------------------------|------------------|-----------------------------------------|
+| Minimum processor state           | 100%             | CPU never down-clocks. More power/heat. |
+| Maximum processor state           | 100%             | Removes any CPU frequency cap.          |
+| Unattended sleep timeout          | Never            | **Hidden** Windows setting — needs admin. |
+| Processor idle disable (C-states) | On               | **Hidden**, aggressive — CPU never idles; runs hotter. Needs admin. |
 
 The two hidden settings are unhidden on demand (via `powercfg -attributes`),
-which requires running as administrator. If you enable one without admin, the UI
-shows a clear warning and the change is skipped.
+which needs administrator rights. Enable one without admin and the UI shows a
+clear warning and skips it.
 
-## How "safely switch back" works
+## Mouse jiggler
 
-Two snapshots live in `state/` (git-ignored, machine-specific):
+An optional mode (off by default) that performs a tiny **net-zero** nudge — it
+moves the cursor a few pixels and instantly moves it back — so the PC looks
+active (screensaver, “available” presence). Because it returns to the exact spot,
+there's no drift and it's consistent across monitors and DPI scales. It **pauses
+when you move the mouse** and **resumes after** the mouse is idle for a
+configurable time (default 60s; `0` = never auto-resume). Distance, interval, and
+resume time are all adjustable in the UI.
 
-- **`state/defaults.json`** — the first non-prevented state ever seen, written
-  once. Used by *Restore defaults* / `dontsleep default`. Newly-revealed hidden
+The jiggler keeps the PC looking *active*; the `powercfg` settings are what
+actually stop sleep. They're complementary — use either or both.
+
+## How “safely switch back” works
+
+State lives in `%APPDATA%\stayawake` (per-machine, not in the repo):
+
+- **`defaults.json`** — the first non-prevented state ever seen, written once.
+  Used by *Restore defaults* / `stayawake default`. Newly-revealed hidden
   settings are backfilled the first time they become visible.
-- **`state/previous.json`** — the state captured right *before* the most recent
-  "Prevent". Used by *Restore previous* / `dontsleep off`.
+- **`previous.json`** — the state captured right *before* the most recent
+  “Prevent”. Used by *Restore previous* / `stayawake off`.
+- **`config.json`** — which settings are enabled, plus jiggler settings.
 
-`state/config.json` stores which settings are enabled. Everything is stored and
-re-applied in powercfg's native units (seconds / percent / 0-1), so restores are
-exact.
+Everything is stored and re-applied in powercfg's native units (seconds /
+percent / 0-1), so restores are exact.
 
 ## Project layout
 
-| File                  | Role                                                      |
-|-----------------------|----------------------------------------------------------|
-| `powercfg_manager.py` | Stateless wrapper over `powercfg` + the settings catalog |
-| `core.py`             | Shared logic: config, snapshots, prevent/restore, status |
-| `server.py`           | Local HTTP server + JSON API, serves the web UI          |
-| `cli.py`              | The `dontsleep` command                                  |
-| `static/`             | The web UI (no build step)                               |
-| `dontsleep.cmd`       | PATH shim for the CLI                                     |
-| `install.ps1`         | Adds to user PATH + creates shortcuts (no admin)         |
-| `bootstrap.ps1`       | One-line web installer (irm \| iex): Python + download + install |
-| `uninstall.ps1`       | Removes PATH entry, shortcuts, and the install folder    |
-| `run.bat`             | Double-click launcher for the server                     |
+| Path                         | Role                                                  |
+|------------------------------|-------------------------------------------------------|
+| `main.go`                    | Entry point: HTTP server + embedded UI + `stayawake` CLI |
+| `internal/powercfg`          | `powercfg` wrapper + settings catalog (locale-proof parser) |
+| `internal/core`              | Config, snapshots, prevent/restore, status            |
+| `internal/jiggler`           | Mouse-jiggler mode                                     |
+| `static/`                    | The web UI, embedded into the exe via `go:embed`      |
+| `bootstrap.ps1`              | One-line web installer (`irm … | iex`): download exe + install + launch |
+| `install.ps1`                | Install a locally-built exe                            |
+| `.github/workflows/release.yml` | Builds & publishes `stayawake.exe` on a `v*` tag   |
+| `docs/`                      | GitHub Pages landing page + screenshots               |
+| `cloudflare-worker.js`       | Routes `stayawa.ke` (script for PowerShell, site for browsers) |
 
 ## Uninstall
 
 ```powershell
-dontsleep uninstall
+stayawake uninstall
 ```
 
 It restores your Windows **default** power settings first (so the PC isn't left
-unable to sleep), then removes the PATH entry and shortcuts. If installed via the
-one-liner (under `%LOCALAPPDATA%\dontsleep`), it also deletes the install folder;
-a manual/dev checkout is left in place. Add `-y` to skip the confirmation. You can
-also run `uninstall.ps1` directly.
+unable to sleep), stops the server, then removes the PATH entry and shortcuts.
+If installed under `%LOCALAPPDATA%\stayawake`, it also deletes the install and
+state folders; a dev checkout is left in place. Add `-y` to skip the prompt.
+
+## Building & releasing
+
+```powershell
+go test ./...
+go build -ldflags "-s -w" -o stayawake.exe .
+```
+
+Pushing a tag like `v1.0.0` triggers the GitHub Actions workflow, which builds
+`stayawake.exe` and attaches it to a Release. `bootstrap.ps1` always downloads
+the latest release asset.
 
 ## Notes / limitations
 

@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Don't Sleep</title>
+  <title>StayAwake</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☕</text></svg>" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <main class="app">
     <header class="header">
-      <h1>Don't&nbsp;Sleep</h1>
+      <h1>StayAwake</h1>
       <p class="subtitle">Control the Windows power settings that let your PC sleep.</p>
     </header>
 
@@ -46,6 +46,28 @@
       <div class="rows" id="advancedRows"></div>
     </section>
 
+    <section class="group-card">
+      <div class="group-head">
+        <h2>Move the mouse <span class="tag">jiggler</span></h2>
+        <span class="hint" id="jigStatus">Off</span>
+      </div>
+      <div class="row">
+        <label class="switch">
+          <input type="checkbox" id="jigEnabled" />
+          <span class="slider"></span>
+        </label>
+        <div class="row-main">
+          <div class="row-name">Keep the mouse moving</div>
+          <div class="row-note muted">A tiny back-and-forth nudge so the PC looks active. Pauses when you move the mouse, resumes after it's idle.</div>
+        </div>
+      </div>
+      <div class="jig-settings">
+        <label>Nudge <input type="number" id="jigDistance" min="1" max="50" /> px</label>
+        <label>Every <input type="number" id="jigInterval" min="5" max="3600" /> sec</label>
+        <label>Resume after idle <input type="number" id="jigResume" min="0" max="86400" /> sec <span class="muted">(0 = never)</span></label>
+      </div>
+    </section>
+
     <section class="snapshots">
       <div class="snap">
         <h3>Saved defaults</h3>
@@ -60,7 +82,7 @@
     <div class="toast" id="toast" hidden></div>
 
     <footer class="footer">
-      <span>Local app • <code>127.0.0.1:8765</code> • CLI: <code>dontsleep on | off | default</code></span>
+      <span>Local app • <code>127.0.0.1:8765</code> • CLI: <code>stayawake on | off | default</code></span>
     </footer>
   </main>
 
@@ -75,8 +97,8 @@
         <div class="row-note muted"></div>
       </div>
       <div class="row-vals">
-        <div class="val"><span class="val-label">AC</span><span class="val-ac"></span></div>
-        <div class="val"><span class="val-label">DC</span><span class="val-dc"></span></div>
+        <div class="val"><span class="val-label">Plugged in</span><span class="val-ac"></span></div>
+        <div class="val"><span class="val-label">On battery</span><span class="val-dc"></span></div>
       </div>
     </div>
   </template>

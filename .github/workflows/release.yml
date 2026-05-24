@@ -1,0 +1,40 @@
+name: release
+
+# Build stayawake.exe and publish it to a GitHub Release.
+# Push a tag like v1.0.0 to cut a release; the exe is attached as
+# `stayawake.exe`, which bootstrap.ps1 downloads from /releases/latest/download/.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest # native Windows: the app uses Windows-only syscalls
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "stable"
+
+      - name: Test
+        run: go test ./...
+
+      - name: Build
+        run: go build -ldflags "-s -w" -o stayawake.exe .
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: stayawake-exe
+          path: stayawake.exe
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: stayawake.exe

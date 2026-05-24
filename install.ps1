@@ -1,51 +1,43 @@
-# install.ps1 - Don't Sleep
-# Sets up the `dontsleep` command and shortcuts. No administrator rights needed:
-# it only edits the *user* PATH and creates *user* shortcuts.
+# install.ps1 - install a locally-built StayAwake
 #
-# Run:  powershell -ExecutionPolicy Bypass -File install.ps1
+# For development / installing from a clone. Build first, then run this:
+#   go build -ldflags "-s -w" -o stayawake.exe .
+#   powershell -ExecutionPolicy Bypass -File install.ps1
+#
+# End users don't need this - they use the one-liner (see README / bootstrap.ps1).
+# No administrator rights required.
 
 $ErrorActionPreference = "Stop"
-$base = $PSScriptRoot
 
-# 1) Add this folder to the user PATH so `dontsleep` resolves anywhere.
-$userPath = [Environment]::GetEnvironmentVariable("Path", "User")
-if (-not $userPath) { $userPath = "" }
-$entries = $userPath.Split(";") | Where-Object { $_ -ne "" }
-if ($entries -notcontains $base) {
-    $newPath = (($entries + $base) -join ";")
-    [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
-    Write-Host "Added to user PATH: $base"
-    Write-Host "  (open a NEW terminal for `dontsleep` to be available)"
-} else {
-    Write-Host "Already on user PATH: $base"
+$src = Join-Path $PSScriptRoot "stayawake.exe"
+if (-not (Test-Path $src)) {
+    throw "stayawake.exe not found. Build it first:  go build -ldflags `"-s -w`" -o stayawake.exe ."
 }
 
-# 2) Resolve a windowless Python (pythonw) to launch the app without a console.
-$python = (Get-Command python -ErrorAction SilentlyContinue).Source
-if (-not $python) { $python = (Get-Command py -ErrorAction SilentlyContinue).Source }
-$pythonw = $null
-if ($python) {
-    $candidate = Join-Path (Split-Path $python) "pythonw.exe"
-    if (Test-Path $candidate) { $pythonw = $candidate }
-}
-if (-not $pythonw) { $pythonw = $python }
+$dir = Join-Path $env:LOCALAPPDATA "stayawake"
+$exe = Join-Path $dir "stayawake.exe"
+New-Item -ItemType Directory -Force -Path $dir | Out-Null
+Copy-Item $src $exe -Force
+Write-Host "Installed to $dir"
 
-# 3) Create Start Menu + Desktop shortcuts that open the web UI.
-$cli = Join-Path $base "cli.py"
+$p = [Environment]::GetEnvironmentVariable("Path", "User")
+if (-not $p) { $p = "" }
+$entries = $p.Split(";") | Where-Object { $_ -ne "" }
+if ($entries -notcontains $dir) {
+    [Environment]::SetEnvironmentVariable("Path", (($entries + $dir) -join ";"), "User")
+    $env:Path += ";$dir"
+    Write-Host "Added to PATH (open a new terminal to use 'stayawake')."
+}
+
 $ws = New-Object -ComObject WScript.Shell
-$targets = @(
-    (Join-Path ([Environment]::GetFolderPath("Desktop")) "Don't Sleep.lnk"),
-    (Join-Path ([Environment]::GetFolderPath("Programs")) "Don't Sleep.lnk")
-)
-foreach ($lnkPath in $targets) {
-    $lnk = $ws.CreateShortcut($lnkPath)
-    $lnk.TargetPath = $pythonw
-    $lnk.Arguments = "`"$cli`""
-    $lnk.WorkingDirectory = $base
-    $lnk.Description = "Don't Sleep - control Windows sleep settings"
-    $lnk.Save()
-    Write-Host "Shortcut created: $lnkPath"
+foreach ($lnk in @(
+        (Join-Path ([Environment]::GetFolderPath("Desktop")) "StayAwake.lnk"),
+        (Join-Path ([Environment]::GetFolderPath("Programs")) "StayAwake.lnk"))) {
+    $s = $ws.CreateShortcut($lnk)
+    $s.TargetPath = $exe
+    $s.WorkingDirectory = $dir
+    $s.Description = "StayAwake - keep your Windows PC awake"
+    $s.Save()
 }
 
-Write-Host ""
-Write-Host "Done. Try:  dontsleep on   |   dontsleep off   |   dontsleep default"
+Write-Host "Done. Try:  stayawake on | off | default"

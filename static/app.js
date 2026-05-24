@@ -8,6 +8,8 @@ const els = {
   coreRows: $("coreRows"), advancedRows: $("advancedRows"),
   defaultsInfo: $("defaultsInfo"), previousInfo: $("previousInfo"),
   toast: $("toast"), rowTpl: $("rowTpl"),
+  jigEnabled: $("jigEnabled"), jigDistance: $("jigDistance"), jigInterval: $("jigInterval"),
+  jigResume: $("jigResume"), jigStatus: $("jigStatus"),
 };
 
 let busy = false;
@@ -98,10 +100,12 @@ function render(data) {
     els.banner.hidden = false;
     els.banner.textContent =
       `⚠ Enabled hidden setting(s) need administrator rights: ${needAdmin.join(", ")}. ` +
-      `Re-run Don't Sleep as administrator to control them.`;
+      `Re-run StayAwake as administrator to control them.`;
   } else {
     els.banner.hidden = true;
   }
+
+  renderJiggler(data);
 
   els.defaultsInfo.textContent = snapSummary(data.defaults);
   els.previousInfo.textContent = snapSummary(data.previous);
@@ -110,6 +114,39 @@ function render(data) {
   els.prevent.textContent = data.prevented ? "Sleep already prevented" : "Prevent sleep";
   els.restorePrev.disabled = busy || !data.hasPrevious;
   els.restoreDefault.disabled = busy || !data.hasDefaults;
+}
+
+function renderJiggler(data) {
+  const j = data.jiggler || {};
+  const a = document.activeElement;
+  if (a !== els.jigEnabled) els.jigEnabled.checked = !!j.enabled;
+  if (a !== els.jigDistance) els.jigDistance.value = j.distancePx;
+  if (a !== els.jigInterval) els.jigInterval.value = j.intervalSeconds;
+  if (a !== els.jigResume) els.jigResume.value = j.resumeAfterSeconds;
+
+  let txt = "Off";
+  if (data.jigglerState === "active") txt = "Active — nudging";
+  else if (data.jigglerState === "paused") txt = "Paused — you're using the mouse";
+  else if (j.enabled) txt = "Enabled";
+  els.jigStatus.textContent = txt;
+}
+
+async function postJiggler() {
+  const num = (el, def) => { const n = parseInt(el.value, 10); return Number.isFinite(n) ? n : def; };
+  busy = true;
+  const data = await call("/api/config", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jiggler: {
+      enabled: els.jigEnabled.checked,
+      distancePx: num(els.jigDistance, 2),
+      intervalSeconds: num(els.jigInterval, 30),
+      resumeAfterSeconds: num(els.jigResume, 60),
+    } }),
+  });
+  busy = false;
+  render(data);
+  if (data.error) toast(data.error, "err");
 }
 
 async function call(url, opts) {
@@ -148,6 +185,9 @@ async function doAction(url, label) {
   if (data.error) toast(data.error, "err");
   else toast(`${label} ✓`, "ok");
 }
+
+[els.jigEnabled, els.jigDistance, els.jigInterval, els.jigResume].forEach((el) =>
+  el.addEventListener("change", postJiggler));
 
 els.prevent.addEventListener("click", () => doAction("/api/prevent", "Preventing sleep"));
 els.restorePrev.addEventListener("click", () => doAction("/api/restore-previous", "Restoring previous"));

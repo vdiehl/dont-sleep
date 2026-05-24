@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Don't Sleep — keep your Windows PC awake</title>
+  <title>StayAwake — keep your Windows PC awake</title>
   <meta name="description" content="A tiny local web app + CLI to toggle the Windows power settings that let your PC sleep, with safe one-click restore." />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☕</text></svg>" />
   <style>
@@ -61,7 +61,7 @@
 <body>
   <div class="wrap">
     <header>
-      <h1>Don't&nbsp;Sleep</h1>
+      <h1>StayAwake</h1>
       <p class="tag">Stop your Windows PC from sleeping — from a web UI or a one-word command. Safely switch back anytime.</p>
     </header>
 
@@ -71,36 +71,36 @@
         <code id="cmd">irm https://stayawa.ke | iex</code>
         <button onclick="copyCmd()">Copy</button>
       </div>
-      <p class="sub">Installs to <code>%LOCALAPPDATA%\dontsleep</code>, adds the <code>dontsleep</code> command to your PATH, and installs Python via winget if needed. No admin required.</p>
+      <p class="sub">Downloads a single <code>stayawake.exe</code> to <code>%LOCALAPPDATA%\stayawake</code>, adds the <code>stayawake</code> command to your PATH, and launches the app. No runtime, no admin required.</p>
     </section>
 
     <section class="shots">
       <figure>
-        <img src="ui-can-sleep.png" alt="Don't Sleep — default state, the PC can still sleep" />
+        <img src="ui-can-sleep.png" alt="StayAwake — default state, the PC can still sleep" />
         <figcaption>Default — your PC can still sleep</figcaption>
       </figure>
       <figure>
-        <img src="ui-prevented.png" alt="Don't Sleep — sleep prevented, all timeouts set to Never" />
+        <img src="ui-prevented.png" alt="StayAwake — sleep prevented, all timeouts set to Never" />
         <figcaption>After “Prevent sleep”</figcaption>
       </figure>
     </section>
 
     <h2 class="section">Why</h2>
     <div class="grid">
-      <div class="feat"><b>No dependencies</b><span>Pure Python standard library + the built-in <code>powercfg</code>. Nothing leaves your machine; the server only listens on 127.0.0.1.</span></div>
+      <div class="feat"><b>Single tiny exe</b><span>One self-contained binary — no runtime to install. Just calls the built-in <code>powercfg</code>. Nothing leaves your machine; the server only listens on 127.0.0.1.</span></div>
       <div class="feat"><b>Safe restore</b><span>Saves your defaults and previous values, in powercfg's native units, so switching back is exact.</span></div>
-      <div class="feat"><b>Web UI or CLI</b><span>Toggle from a browser, or run <code>dontsleep on/off/default</code> headless. Same logic, same result.</span></div>
+      <div class="feat"><b>Web UI or CLI</b><span>Toggle from a browser, or run <code>stayawake on/off/default</code> headless. Same logic, same result.</span></div>
       <div class="feat"><b>Core + advanced</b><span>Sleep/hibernate/display/disk by default; opt in to processor-state and hidden CPU knobs.</span></div>
     </div>
 
     <h2 class="section">Commands</h2>
     <table>
       <tr><th>Command</th><th>Action</th></tr>
-      <tr><td><code>dontsleep</code></td><td>Open the web UI</td></tr>
-      <tr><td><code>dontsleep on</code></td><td>Prevent sleep now</td></tr>
-      <tr><td><code>dontsleep off</code></td><td>Restore previous values</td></tr>
-      <tr><td><code>dontsleep default</code></td><td>Restore Windows defaults</td></tr>
-      <tr><td><code>dontsleep uninstall</code></td><td>Restore defaults and remove everything</td></tr>
+      <tr><td><code>stayawake</code></td><td>Open the web UI</td></tr>
+      <tr><td><code>stayawake on</code></td><td>Prevent sleep now</td></tr>
+      <tr><td><code>stayawake off</code></td><td>Restore previous values</td></tr>
+      <tr><td><code>stayawake default</code></td><td>Restore Windows defaults</td></tr>
+      <tr><td><code>stayawake uninstall</code></td><td>Restore defaults and remove everything</td></tr>
     </table>
 
     <div class="cta">

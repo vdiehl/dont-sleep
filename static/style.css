@@ -92,7 +92,7 @@ html, body {
 .row-name { font-weight: 600; }
 .row-note { font-size: 0.8rem; margin-top: 2px; }
 .row-vals { display: flex; gap: 16px; text-align: right; }
-.val { display: flex; flex-direction: column; min-width: 64px; }
+.val { display: flex; flex-direction: column; min-width: 78px; white-space: nowrap; }
 .val-label { font-size: 0.65rem; color: var(--muted); letter-spacing: 0.06em; }
 .val-ac, .val-dc { font-weight: 600; }
 .is-prevented-val { color: var(--accent); }
@@ -113,6 +113,14 @@ html, body {
 .switch input:checked + .slider { background: var(--primary); border-color: var(--primary); }
 .switch input:checked + .slider::before { transform: translateX(18px); background: #fff; }
 .switch input:disabled + .slider { opacity: 0.5; cursor: not-allowed; }
+
+/* Jiggler settings */
+.jig-settings { display: flex; flex-wrap: wrap; gap: 18px; padding: 14px 4px 2px; color: var(--muted); font-size: 0.9rem; }
+.jig-settings label { display: inline-flex; align-items: center; gap: 6px; }
+.jig-settings input[type="number"] {
+  width: 62px; background: var(--bg-card-2); border: 1px solid var(--border); color: var(--text);
+  border-radius: 8px; padding: 6px 8px; font-size: 0.9rem;
+}
 
 /* Snapshots */
 .snapshots { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 22px; }
