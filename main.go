@@ -56,24 +56,87 @@ func jigglerLoad() (bool, jiggler.Config) {
 var staticFS embed.FS
 
 const (
-	host = "127.0.0.1"
-	port = 8765
+	host        = "127.0.0.1"
+	defaultPort = 8765
 )
 
-func addr() string { return fmt.Sprintf("%s:%d", host, port) }
-func url() string  { return fmt.Sprintf("http://%s/", addr()) }
+func addrFor(p int) string { return fmt.Sprintf("%s:%d", host, p) }
+func urlFor(p int) string  { return fmt.Sprintf("http://%s/", addrFor(p)) }
+
+// The active port is written here by `serve` so `open`/`stop` can find it
+// (needed because the port may be chosen via --port or auto-bumped if busy).
+func portFile() string { return filepath.Join(core.StateDir(), "port") }
+
+func writePortFile(p int) {
+	_ = os.MkdirAll(core.StateDir(), 0o755)
+	_ = os.WriteFile(portFile(), []byte(strconv.Itoa(p)), 0o644)
+}
+
+func readActivePort() (int, bool) {
+	b, err := os.ReadFile(portFile())
+	if err != nil {
+		return 0, false
+	}
+	p, err := strconv.Atoi(strings.TrimSpace(string(b)))
+	if err != nil {
+		return 0, false
+	}
+	return p, true
+}
+
+// parsePort pulls a `--port N` flag out of args, defaulting to def.
+func parsePort(args []string, def int) int {
+	for i := 0; i+1 < len(args); i++ {
+		if args[i] == "--port" {
+			if n, err := strconv.Atoi(args[i+1]); err == nil && n > 0 && n < 65536 {
+				return n
+			}
+		}
+	}
+	return def
+}
+
+// hasPortFlag reports whether the user explicitly passed a valid --port.
+func hasPortFlag(args []string) bool {
+	for i := 0; i+1 < len(args); i++ {
+		if args[i] == "--port" {
+			if _, err := strconv.Atoi(args[i+1]); err == nil {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// listen binds 127.0.0.1, trying `tries` consecutive ports from `start`.
+// tries == 1 means honor exactly that port (used for an explicit --port).
+func listen(start, tries int) (net.Listener, int, error) {
+	var lastErr error
+	for p := start; p < start+tries && p < 65536; p++ {
+		ln, err := net.Listen("tcp", addrFor(p))
+		if err == nil {
+			return ln, p, nil
+		}
+		lastErr = err
+	}
+	return nil, 0, fmt.Errorf("could not bind a port near %d: %v", start, lastErr)
+}
 
 func main() {
+	// First non-flag token is the command; flags (e.g. --port) may follow or,
+	// for the default "open", come first (`stayawake --port 9000`).
+	args := os.Args[1:]
 	cmd := "open"
-	if len(os.Args) > 1 {
-		cmd = strings.ToLower(os.Args[1])
+	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
+		cmd = strings.ToLower(args[0])
+		args = args[1:]
 	}
 	var code int
 	switch cmd {
 	case "serve":
-		code = cmdServe()
+		code = cmdServe(args)
 	case "open", "":
-		code = cmdOpen()
+		code = cmdOpen(args)
 	case "on":
 		code = cmdAction("on")
 	case "off":
@@ -83,17 +146,17 @@ func main() {
 	case "status":
 		printStatus(core.GetStatus())
 	case "enable":
-		code = cmdSetEnabled(os.Args[2:], true)
+		code = cmdSetEnabled(args, true)
 	case "disable":
-		code = cmdSetEnabled(os.Args[2:], false)
+		code = cmdSetEnabled(args, false)
 	case "jiggle":
-		code = cmdJiggle(os.Args[2:])
+		code = cmdJiggle(args)
 	case "__jiggle": // internal: the detached daemon entry point
 		jiggler.RunDaemon(pidPath(), statePath(), jigglerLoad)
 	case "stop":
 		code = cmdStop()
 	case "uninstall":
-		code = cmdUninstall(os.Args[2:])
+		code = cmdUninstall(args)
 	case "help", "-h", "--help":
 		fmt.Print(usage)
 	default:
@@ -118,18 +181,23 @@ Usage:
   stayawake jiggle off  Stop the mouse jiggler.
   stayawake stop        Stop the background web server.
   stayawake uninstall   Restore defaults and remove from PATH/shortcuts.
+
+Flags:
+  --port N              Web UI port. The default (8765) auto-bumps to the next
+                        free port if busy; an explicit --port must be free or it
+                        errors. Works with the default open and with 'serve'.
 `
 
 // ---- HTTP server ----------------------------------------------------------
 
-func cmdServe() int {
+func cmdServe(args []string) int {
 	sub, err := fs.Sub(staticFS, "static")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
 	mux := http.NewServeMux()
-	srv := &http.Server{Addr: addr(), Handler: mux}
+	srv := &http.Server{Handler: mux}
 
 	mux.HandleFunc("/api/status", func(w http.ResponseWriter, r *http.Request) {
 		s := core.GetStatus()
@@ -183,9 +251,26 @@ func cmdServe() int {
 	})
 	mux.Handle("/", http.FileServer(http.FS(sub)))
 
+	desired := parsePort(args, defaultPort)
+	tries := 21 // default port: auto-bump to the next free one if busy
+	if hasPortFlag(args) {
+		tries = 1 // explicit --port: honor it exactly, or fail
+	}
+	ln, actual, err := listen(desired, tries)
+	if err != nil {
+		if tries == 1 {
+			fmt.Fprintf(os.Stderr, "Port %d is already in use. Choose another with --port.\n", desired)
+		} else {
+			fmt.Fprintln(os.Stderr, err)
+		}
+		return 1
+	}
+	writePortFile(actual)
+	defer os.Remove(portFile())
+
 	applyJiggler() // start the jiggler if it was left enabled
-	fmt.Println("StayAwake serving at", url())
-	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	fmt.Println("StayAwake serving at", urlFor(actual))
+	if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
@@ -208,21 +293,26 @@ func writeJSON(w http.ResponseWriter, payload any, err error) {
 
 // ---- CLI ------------------------------------------------------------------
 
-func serverRunning() bool {
-	c, err := net.DialTimeout("tcp", addr(), 400*time.Millisecond)
+// serverRunning returns the active port if a server is reachable, else ok=false.
+func serverRunning() (int, bool) {
+	p, ok := readActivePort()
+	if !ok {
+		return 0, false
+	}
+	c, err := net.DialTimeout("tcp", addrFor(p), 400*time.Millisecond)
 	if err != nil {
-		return false
+		return 0, false
 	}
 	_ = c.Close()
-	return true
+	return p, true
 }
 
-func startServerDetached() bool {
+func startServerDetached(desiredPort int) bool {
 	exe, err := os.Executable()
 	if err != nil {
 		return false
 	}
-	cmd := exec.Command(exe, "serve")
+	cmd := exec.Command(exe, "serve", "--port", strconv.Itoa(desiredPort))
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		HideWindow:    true,
 		CreationFlags: 0x00000008 | 0x00000200, // DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
@@ -231,7 +321,7 @@ func startServerDetached() bool {
 		return false
 	}
 	for i := 0; i < 50; i++ {
-		if serverRunning() {
+		if _, ok := serverRunning(); ok {
 			return true
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -245,16 +335,24 @@ func openBrowser(u string) {
 	_ = cmd.Start()
 }
 
-func cmdOpen() int {
-	if !serverRunning() {
-		fmt.Println("Starting StayAwake...")
-		if !startServerDetached() {
-			fmt.Fprintln(os.Stderr, "Could not start the server.")
-			return 1
-		}
+func cmdOpen(args []string) int {
+	if p, ok := serverRunning(); ok {
+		openBrowser(urlFor(p))
+		fmt.Println("Opened", urlFor(p))
+		return 0
 	}
-	openBrowser(url())
-	fmt.Println("Opened", url())
+	fmt.Println("Starting StayAwake...")
+	if !startServerDetached(parsePort(args, defaultPort)) {
+		fmt.Fprintln(os.Stderr, "Could not start the server.")
+		return 1
+	}
+	p, ok := serverRunning()
+	if !ok {
+		fmt.Fprintln(os.Stderr, "Server did not come up.")
+		return 1
+	}
+	openBrowser(urlFor(p))
+	fmt.Println("Opened", urlFor(p))
 	return 0
 }
 
@@ -385,11 +483,12 @@ func cmdJiggle(args []string) int {
 }
 
 func cmdStop() int {
-	if !serverRunning() {
+	p, ok := serverRunning()
+	if !ok {
 		fmt.Println("Server is not running.")
 		return 0
 	}
-	_, _ = http.Post(url()+"api/quit", "application/json", bytes.NewReader([]byte("{}")))
+	_, _ = http.Post(urlFor(p)+"api/quit", "application/json", bytes.NewReader([]byte("{}")))
 	fmt.Println("Stopped the StayAwake server.")
 	return 0
 }
@@ -470,10 +569,11 @@ func cmdUninstall(args []string) int {
 	}
 
 	// Stop a running background server (its CWD may be the install folder).
-	if serverRunning() {
-		_, _ = http.Post(url()+"api/quit", "application/json", bytes.NewReader([]byte("{}")))
+	if p, ok := serverRunning(); ok {
+		_, _ = http.Post(urlFor(p)+"api/quit", "application/json", bytes.NewReader([]byte("{}")))
 		time.Sleep(500 * time.Millisecond)
 	}
+	jiggler.Stop(pidPath())
 
 	exe, _ := os.Executable()
 	installDir := filepath.Dir(exe)

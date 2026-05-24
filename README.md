@@ -61,6 +61,10 @@ use the `stayawake` command.
 `on` / `off` / `default` / `status` run without the server and share the exact
 same logic as the UI, so changes are reflected in both.
 
+The web UI uses port **8765** by default; pass `--port N` (with `stayawake` or
+`stayawake serve`) to change it. The default port auto-bumps to the next free
+one if it's busy; an **explicit `--port` must be free or it errors**.
+
 ## What it controls
 
 Settings are split into **core** (changed by default) and **advanced** (opt-in,

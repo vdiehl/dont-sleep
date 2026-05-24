@@ -139,6 +139,8 @@ html, body {
 
 .footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top: 8px; }
 .footer code { color: #c3c9d6; }
+.footer a { color: var(--primary-hover); text-decoration: none; }
+.footer a:hover { text-decoration: underline; }
 
 @media (max-width: 560px) {
   .snapshots { grid-template-columns: 1fr; }
