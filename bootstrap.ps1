@@ -8,6 +8,9 @@
 
 $ErrorActionPreference = "Stop"
 
+# Ensure TLS 1.2 so downloads work on older / locked-down PowerShell sessions.
+try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch {}
+
 # ----- EDIT if your repo owner / name / branch differ -----------------------
 $Owner  = "vdiehl"
 $Repo   = "dont-sleep"
