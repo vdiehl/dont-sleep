@@ -30,7 +30,7 @@ leaves your machine, and the web server listens on `127.0.0.1` only.
 irm https://stayawa.ke | iex
 ```
 
-> Prefer the raw URL: `irm https://raw.githubusercontent.com/vdiehl/dont-sleep/main/bootstrap.ps1 | iex`
+> Prefer the raw URL: `irm https://raw.githubusercontent.com/vdiehl/stayawake/main/bootstrap.ps1 | iex`
 
 **From source** — build it yourself, then install:
 

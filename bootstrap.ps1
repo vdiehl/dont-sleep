@@ -13,7 +13,7 @@ try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::S
 
 # ----- EDIT if your repo owner / name differ --------------------------------
 $Owner = "vdiehl"
-$Repo  = "dont-sleep"
+$Repo  = "stayawake"
 # ----------------------------------------------------------------------------
 
 $exeUrl = "https://github.com/$Owner/$Repo/releases/latest/download/stayawake.exe"

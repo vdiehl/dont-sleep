@@ -14,8 +14,8 @@
  *   Deploy -> Settings -> Domains & Routes -> Add Custom Domain -> stayawa.ke
  */
 
-const SCRIPT_URL = "https://raw.githubusercontent.com/vdiehl/dont-sleep/main/bootstrap.ps1";
-const WEBSITE_URL = "https://vdiehl.github.io/dont-sleep/"; // GitHub Pages landing page
+const SCRIPT_URL = "https://raw.githubusercontent.com/vdiehl/stayawake/main/bootstrap.ps1";
+const WEBSITE_URL = "https://vdiehl.github.io/stayawake/"; // GitHub Pages landing page
 
 export default {
   async fetch(request) {
